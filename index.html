@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Violence_Detection_By_Pratyaksh</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            font-family: 'Arial Black', sans-serif;
+            color: #f8300d;
+            background-color: #000000;
+            padding: 10px;
+            margin-bottom: 30px;
+        }
+
+        .container {
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        #preview {
+            display: none;
+            max-width: 400px;
+            margin-bottom: 20px;
+        }
+
+        .upload-btn,
+        .detect-btn {
+            display: inline-block;
+            width: auto;
+            margin-right: 10px;
+        }
+
+        #result {
+            text-align: center;
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .video-result {
+            margin-top: 30px;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        function processVideo(response) {
+            var results = response.results;
+            var videoContainer = document.getElementById("video-container");
+            videoContainer.innerHTML = "";
+
+            for (var i = 0; i < results.length; i++) {
+                var result = results[i];
+                var detections = result.detection;
+                var frameData = result.data;
+
+                // Create a new video element for each frame
+                var videoFrame = document.createElement("video");
+                videoFrame.src = "data:image/jpeg;base64," + frameData;
+                videoFrame.controls = true;
+                videoFrame.width = 400;
+                videoFrame.height = 300;
+                videoContainer.appendChild(videoFrame);
+
+                var resultText = "";
+                for (var j = 0; j < detections.length; j++) {
+                    var detection = detections[j];
+                    var class_name = mapClassToName(detection.class);
+                    var confidence = parseFloat(detection.confidence).toFixed(2);
+                    var detectionText = "Detection: " + class_name + ", Score: " + confidence;
+                    resultText += detectionText + "<br>";
+                }
+
+                // Create a new div to display the detections for the frame
+                var resultDiv = document.createElement("div");
+                resultDiv.innerHTML = resultText;
+                resultDiv.className = "video-result";
+                videoContainer.appendChild(resultDiv);
+            }
+        }
+
+        function detectMedia() {
+            var form = new FormData();
+            var fileInput = document.getElementById("media-input");
+            var file = fileInput.files[0];
+            var isImage = file.type.startsWith("image");
+            var isVideo = file.type.startsWith("video");
+
+            form.append(isImage ? "image" : "video", file);
+
+            $.ajax({
+                url: "http://localhost:2003/detection",
+                type: "POST",
+                data: form,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    var detections = response.type === "image" ? response.detection : response.results;
+                    if (response.error) {
+                        var errorMessage = response.error;
+                        document.getElementById("error-message").innerHTML = errorMessage;
+                        document.getElementById("video-container").innerHTML = ""; // Clear video container
+                    } else {
+                        if (response.type === "image") {
+                            // Process image detection results
+                            var resultText = "";
+                            var imgElement = document.getElementById("preview");
+                            imgElement.src = "data:image/jpeg;base64," + response.data;
+                            imgElement.style.display = "block";
+                            for (var i = 0; i < detections.length; i++) {
+                                var detection = detections[i];
+                                var detectionText = "Detection: " + detection.class + ", Score: " + parseFloat(detection.confidence).toFixed(2);
+                                resultText += detectionText + "<br>";
+                            }
+                            document.getElementById("result").innerHTML = resultText;
+                        } else {
+                            // Process video detection results
+                            processVideo(response);
+                        }
+                    }
+                },
+                error: function (error) {
+                    console.log(error);
+                }
+            });
+        }
+
+        function previewMedia(event) {
+            var input = event.target;
+            var reader = new FileReader();
+
+            reader.onload = function () {
+                var mediaElement = document.getElementById("preview");
+                mediaElement.src = reader.result;
+                mediaElement.style.display = "block";
+            };
+
+            reader.readAsDataURL(input.files[0]);
+        }
+        function displayResults(detections) {
+            var resultText = "";
+            for (var i = 0; i < detections.length; i++) {
+                var detection = detections[i];
+                var class_name = mapClassToName(detection.class);
+                var confidence = parseFloat(detection.confidence).toFixed(2);
+                var detectionText = "Detection: " + class_name + ", Score: " + confidence;
+                resultText += detectionText + "<br>";
+            }
+            document.getElementById("result").innerHTML = resultText;
+        }
+    </script>
+</head>
+<body>
+<div class="container">
+    <h1 class="display-4">Violence Detection</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="media-input" class="form-label">Upload Media</label>
+                <input type="file" class="form-control" id="media-input" accept="image/*, video/*"
+                       onchange="previewMedia(event)">
+            </div>
+            <div class="text-start">
+                <button class="btn btn-primary upload-btn" onclick="document.getElementById('media-input').click()">Choose
+                    File
+                </button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="text-center">
+                <img id="preview" src="#" alt="Preview" class="img-fluid">
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="text-end">
+                <button class="btn btn-success detect-btn" onclick="detectMedia()">Detect</button>
+            </div>
+        </div>
+    </div>
+    <!-- Add the following div to display the detection result -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div id="result"></div>
+        </div>
+    </div>
+    <!-- Add a div to display an error message for videos not 30 seconds long -->
+    <div class="row mt-4">
+        <div class="col-md-12" id="error-message"></div>
+    </div>
+    <!-- Add a div to display the video results -->
+    <div class="row mt-4">
+        <div class="col-md-12" id="video-container"></div>
+    </div>
+</div>
+</body>
+</html>
